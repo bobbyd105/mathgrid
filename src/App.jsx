@@ -37,6 +37,8 @@ const emptyProgress = {
     correct: 0,
     incorrect: 0,
     total: 0,
+    currentStreak: 0,
+    bestStreak: 0,
   },
 };
 
@@ -49,19 +51,39 @@ const loadProgress = () => {
       return emptyProgress;
     }
 
+    const savedProgress = JSON.parse(rawProgress);
+
     return {
       ...emptyProgress,
-      ...JSON.parse(rawProgress),
+      ...savedProgress,
+      gridAnswers: savedProgress.gridAnswers ?? emptyProgress.gridAnswers,
+      rowAnswers: savedProgress.rowAnswers ?? emptyProgress.rowAnswers,
+      missedFacts: savedProgress.missedFacts ?? emptyProgress.missedFacts,
+      randomStats: {
+        ...emptyProgress.randomStats,
+        ...(savedProgress.randomStats ?? {}),
+      },
     };
   } catch {
     return emptyProgress;
   }
 };
 
-const getRandomFact = () => ({
-  a: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
-  b: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
-});
+const getRandomFact = (avoidKey) => {
+  let nextFact = {
+    a: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
+    b: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
+  };
+
+  for (let attempt = 0; attempt < 20 && makeFactKey(nextFact.a, nextFact.b) === avoidKey; attempt += 1) {
+    nextFact = {
+      a: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
+      b: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
+    };
+  }
+
+  return nextFact;
+};
 
 function App() {
   const [activeMode, setActiveMode] = useState('grid');
@@ -504,21 +526,27 @@ function RandomPracticeMode({ addMissedFact, progress, updateProgress }) {
     }
 
     updateProgress((current) => ({
-      randomStats: {
-        correct: current.randomStats.correct + (isCorrect ? 1 : 0),
-        incorrect: current.randomStats.incorrect + (isCorrect ? 0 : 1),
-        total: current.randomStats.total + 1,
-      },
+      randomStats: (() => {
+        const nextStreak = isCorrect ? (current.randomStats.currentStreak ?? 0) + 1 : 0;
+        return {
+          correct: current.randomStats.correct + (isCorrect ? 1 : 0),
+          incorrect: current.randomStats.incorrect + (isCorrect ? 0 : 1),
+          total: current.randomStats.total + 1,
+          currentStreak: nextStreak,
+          bestStreak: Math.max(current.randomStats.bestStreak ?? 0, nextStreak),
+        };
+      })(),
     }));
 
     setResult({
       isCorrect,
       expected,
+      nextStreak: isCorrect ? (progress.randomStats.currentStreak ?? 0) + 1 : 0,
     });
   };
 
   const nextFact = () => {
-    setFact(getRandomFact());
+    setFact(getRandomFact(makeFactKey(fact.a, fact.b)));
     setAnswer('');
     setResult(null);
   };
@@ -529,6 +557,8 @@ function RandomPracticeMode({ addMissedFact, progress, updateProgress }) {
         correct: 0,
         incorrect: 0,
         total: 0,
+        currentStreak: 0,
+        bestStreak: 0,
       },
     }));
   };
@@ -546,6 +576,8 @@ function RandomPracticeMode({ addMissedFact, progress, updateProgress }) {
           { label: 'Correct', value: progress.randomStats.correct },
           { label: 'Incorrect', value: progress.randomStats.incorrect },
           { label: 'Attempted', value: progress.randomStats.total },
+          { label: 'Streak', value: progress.randomStats.currentStreak },
+          { label: 'Best', value: progress.randomStats.bestStreak },
         ]}
       />
 
@@ -563,7 +595,7 @@ function RandomPracticeMode({ addMissedFact, progress, updateProgress }) {
         />
         {result && (
           <p className={result.isCorrect ? 'result-message correct-text' : 'result-message incorrect-text'}>
-            {result.isCorrect ? 'Correct!' : `Almost. The answer is ${result.expected}.`}
+            {result.isCorrect ? `Correct! Streak: ${result.nextStreak}` : `Almost. The answer is ${result.expected}.`}
           </p>
         )}
         <div className="toolbar centered">
@@ -591,6 +623,7 @@ function RandomPracticeMode({ addMissedFact, progress, updateProgress }) {
 function MissedFactsMode({ missedFacts, removeMissedFact }) {
   const [answers, setAnswers] = useState({});
   const [results, setResults] = useState({});
+  const [clearedFact, setClearedFact] = useState('');
 
   const sortedFacts = [...missedFacts].sort((a, b) => b.lastMissedAt - a.lastMissedAt);
 
@@ -598,6 +631,10 @@ function MissedFactsMode({ missedFacts, removeMissedFact }) {
     setAnswers((current) => ({
       ...current,
       [key]: sanitizeNumberInput(value),
+    }));
+    setResults((current) => ({
+      ...current,
+      [key]: undefined,
     }));
   };
 
@@ -611,12 +648,15 @@ function MissedFactsMode({ missedFacts, removeMissedFact }) {
     }));
 
     if (isCorrect) {
+      setClearedFact(`${fact.a} x ${fact.b}`);
       removeMissedFact(fact.key);
       setAnswers((current) => {
         const nextAnswers = { ...current };
         delete nextAnswers[fact.key];
         return nextAnswers;
       });
+    } else {
+      setClearedFact('');
     }
   };
 
@@ -627,6 +667,13 @@ function MissedFactsMode({ missedFacts, removeMissedFact }) {
         title="Missed Facts"
         subtitle="Retry saved facts. A correct answer clears the fact from the list."
       />
+
+      {clearedFact && (
+        <div className="feedback-banner success">
+          <strong>Fact cleared!</strong>
+          <span>{clearedFact} moved out of Missed Facts.</span>
+        </div>
+      )}
 
       {sortedFacts.length === 0 ? (
         <div className="empty-state">
@@ -656,6 +703,9 @@ function MissedFactsMode({ missedFacts, removeMissedFact }) {
                   <CheckCircle2 size={18} aria-hidden="true" />
                   Check
                 </button>
+                {result === 'incorrect' && (
+                  <small className="answer-hint">Answer: {fact.a * fact.b}</small>
+                )}
               </div>
             );
           })}
