@@ -45,8 +45,7 @@ button:disabled {
   opacity: 0.55;
 }
 
-button:focus-visible,
-.toggle-control:focus-within {
+button:focus-visible {
   outline: 3px solid rgba(50, 120, 216, 0.45);
   outline-offset: 3px;
 }
@@ -242,25 +241,6 @@ h1 {
   padding: 8px 12px;
 }
 
-.toggle-control {
-  align-items: center;
-  background: #fff8d9;
-  border: 2px solid #ecd05a;
-  border-radius: 8px;
-  color: #5d4a06;
-  display: inline-flex;
-  font-weight: 900;
-  gap: 8px;
-  min-height: 44px;
-  padding: 10px 12px;
-}
-
-.toggle-control input {
-  accent-color: var(--blue);
-  height: 18px;
-  width: 18px;
-}
-
 .feedback-banner {
   align-items: center;
   border: 2px solid;
@@ -376,13 +356,6 @@ h1 {
 .big-answer:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 4px rgba(50, 120, 216, 0.16);
-}
-
-.answer-preview {
-  color: var(--blue-dark);
-  display: inline-block;
-  font-size: 1.15rem;
-  font-weight: 900;
 }
 
 .family-picker {

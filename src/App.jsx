@@ -1,11 +1,10 @@
+import React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   Brain,
   CheckCircle2,
   Eraser,
-  Eye,
-  EyeOff,
   Grid3X3,
   PartyPopper,
   RotateCcw,
@@ -135,8 +134,6 @@ function App() {
 }
 
 function FullGridMode({ addMissedFact, progress, updateProgress }) {
-  const [showAnswers, setShowAnswers] = useState(false);
-
   const gridFacts = useMemo(() => createFacts(), []);
 
   const stats = useMemo(() => {
@@ -162,7 +159,6 @@ function FullGridMode({ addMissedFact, progress, updateProgress }) {
 
   const clearGrid = () => {
     updateProgress(() => ({ gridAnswers: {}, gridChecked: false }));
-    setShowAnswers(false);
   };
 
   return (
@@ -196,15 +192,6 @@ function FullGridMode({ addMissedFact, progress, updateProgress }) {
           <Eraser size={18} aria-hidden="true" />
           Clear Grid
         </button>
-        <label className="toggle-control">
-          <input
-            checked={showAnswers}
-            onChange={(event) => setShowAnswers(event.target.checked)}
-            type="checkbox"
-          />
-          {showAnswers ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
-          <span>Show Answers</span>
-        </label>
       </div>
 
       {progress.gridChecked && (
@@ -258,16 +245,12 @@ function FullGridMode({ addMissedFact, progress, updateProgress }) {
 
                   return (
                     <td className={statusClass} key={key}>
-                      {showAnswers ? (
-                        <span className="answer-preview">{expected}</span>
-                      ) : (
-                        <input
-                          aria-label={`${row} times ${column}`}
-                          inputMode="numeric"
-                          onChange={(event) => updateCell(key, event.target.value)}
-                          value={value}
-                        />
-                      )}
+                      <input
+                        aria-label={`${row} times ${column}`}
+                        inputMode="numeric"
+                        onChange={(event) => updateCell(key, event.target.value)}
+                        value={value}
+                      />
                     </td>
                   );
                 })}
