@@ -236,6 +236,11 @@ h1 {
   color: var(--ink);
 }
 
+.danger-button {
+  border-color: #efb7b7;
+  color: #9e3434;
+}
+
 .primary-button.compact {
   min-height: 40px;
   padding: 8px 12px;

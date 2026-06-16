@@ -12,6 +12,7 @@ import {
   Shuffle,
   Sparkles,
   Target,
+  Trash2,
 } from 'lucide-react';
 import {
   calculateGridStats,
@@ -77,6 +78,13 @@ function App() {
     setProgress((current) => removeMissedFactFromProgress(current, key));
   };
 
+  const clearMissedFacts = () => {
+    setProgress((current) => ({
+      ...current,
+      missedFacts: {},
+    }));
+  };
+
   const updateProgress = (updater) => {
     setProgress((current) => ({
       ...current,
@@ -124,6 +132,7 @@ function App() {
 
       <ModeComponent
         addMissedFact={addMissedFact}
+        clearMissedFacts={clearMissedFacts}
         missedFacts={missedFacts}
         progress={progress}
         removeMissedFact={removeMissedFact}
@@ -531,12 +540,24 @@ function RandomPracticeMode({ addMissedFact, progress, updateProgress }) {
   );
 }
 
-function MissedFactsMode({ missedFacts, removeMissedFact }) {
+function MissedFactsMode({ clearMissedFacts, missedFacts, removeMissedFact }) {
   const [answers, setAnswers] = useState({});
   const [results, setResults] = useState({});
   const [clearedFact, setClearedFact] = useState('');
 
   const sortedFacts = [...missedFacts].sort((a, b) => b.lastMissedAt - a.lastMissedAt);
+
+  const handleClearMissedFacts = () => {
+    const confirmed = window.confirm('Clear all missed facts?');
+    if (!confirmed) {
+      return;
+    }
+
+    clearMissedFacts();
+    setAnswers({});
+    setResults({});
+    setClearedFact('');
+  };
 
   const updateAnswer = (key, value) => {
     setAnswers((current) => ({
@@ -579,6 +600,18 @@ function MissedFactsMode({ missedFacts, removeMissedFact }) {
         title="Missed Facts"
         subtitle="Retry saved facts. A correct answer clears the fact from the list."
       />
+
+      <div className="toolbar">
+        <button
+          className="secondary-button danger-button"
+          disabled={sortedFacts.length === 0}
+          type="button"
+          onClick={handleClearMissedFacts}
+        >
+          <Trash2 size={18} aria-hidden="true" />
+          Clear Missed Facts
+        </button>
+      </div>
 
       {clearedFact && (
         <div className="feedback-banner success" role="status">
