@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowRight,
   Brain,
   CheckCircle2,
   Eraser,
   Eye,
   EyeOff,
   Grid3X3,
-  ListRestart,
   PartyPopper,
   RotateCcw,
   Rows3,
@@ -341,6 +341,7 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
   const checked = answers.__checked === 'yes';
   const correct = rowFacts.filter((fact) => Number(answers[fact.key]) === fact.answer).length;
   const completed = rowFacts.filter((fact) => answers[fact.key]).length;
+  const isPerfect = checked && correct === rowFacts.length;
 
   const updateAnswer = (key, value) => {
     updateProgress((current) => ({
@@ -388,6 +389,10 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
     updateProgress(() => ({ rowFamily: nextFamily }));
   };
 
+  const nextFamily = () => {
+    chooseFamily(family === 12 ? 1 : family + 1);
+  };
+
   return (
     <section className="mode-panel" aria-labelledby="row-heading">
       <PanelHeader
@@ -417,6 +422,17 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
         ]}
       />
 
+      {checked && (
+        <div className={isPerfect ? 'feedback-banner success' : 'feedback-banner needs-work'}>
+          <strong>{isPerfect ? 'Row mastered!' : `${12 - correct} to review`}</strong>
+          <span>
+            {isPerfect
+              ? `Every ${family}s fact is correct.`
+              : 'Wrong attempted answers were saved to Missed Facts.'}
+          </span>
+        </div>
+      )}
+
       <div className="question-list">
         {rowFacts.map((fact) => {
           const value = answers[fact.key] ?? '';
@@ -441,6 +457,9 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
                 onChange={(event) => updateAnswer(fact.key, event.target.value)}
                 value={value}
               />
+              {checked && value && !isCorrect && (
+                <small className="answer-hint">Answer: {fact.answer}</small>
+              )}
             </label>
           );
         })}
@@ -455,6 +474,12 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
           <RotateCcw size={18} aria-hidden="true" />
           Reset Row
         </button>
+        {isPerfect && (
+          <button className="secondary-button" type="button" onClick={nextFamily}>
+            <ArrowRight size={18} aria-hidden="true" />
+            Next Family
+          </button>
+        )}
       </div>
     </section>
   );

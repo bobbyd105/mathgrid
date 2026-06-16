@@ -421,6 +421,16 @@ h1 {
   font-weight: 900;
 }
 
+.answer-hint {
+  background: #ffffff;
+  border: 1px solid #f0ad4e;
+  border-radius: 6px;
+  color: #7a4b08;
+  font-weight: 900;
+  grid-column: 1 / -1;
+  padding: 6px 8px;
+}
+
 .question-row.empty {
   background: #f8fbff;
 }
