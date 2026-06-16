@@ -14,9 +14,24 @@ import {
   Sparkles,
   Target,
 } from 'lucide-react';
-
-const STORAGE_KEY = 'mathgrid-progress-v1';
-const NUMBERS = Array.from({ length: 12 }, (_, index) => index + 1);
+import {
+  calculateGridStats,
+  createFacts,
+  createRowFacts,
+  findMissedAnsweredFacts,
+  getRandomFact,
+  isCorrectAnswer,
+  makeFactKey,
+  NUMBERS,
+  sanitizeNumberInput,
+} from './lib/mathFacts.js';
+import {
+  addMissedFactToProgress,
+  emptyProgress,
+  mergeProgress,
+  removeMissedFactFromProgress,
+  STORAGE_KEY,
+} from './lib/progress.js';
 
 const modes = [
   { id: 'grid', label: 'Full Grid', icon: Grid3X3 },
@@ -25,25 +40,6 @@ const modes = [
   { id: 'missed', label: 'Missed', icon: Target },
 ];
 
-const makeFactKey = (a, b) => `${a}x${b}`;
-
-const emptyProgress = {
-  gridAnswers: {},
-  gridChecked: false,
-  rowFamily: 7,
-  rowAnswers: {},
-  missedFacts: {},
-  randomStats: {
-    correct: 0,
-    incorrect: 0,
-    total: 0,
-    currentStreak: 0,
-    bestStreak: 0,
-  },
-};
-
-const sanitizeNumberInput = (value) => value.replace(/[^\d]/g, '').slice(0, 3);
-
 const loadProgress = () => {
   try {
     const rawProgress = localStorage.getItem(STORAGE_KEY);
@@ -51,38 +47,10 @@ const loadProgress = () => {
       return emptyProgress;
     }
 
-    const savedProgress = JSON.parse(rawProgress);
-
-    return {
-      ...emptyProgress,
-      ...savedProgress,
-      gridAnswers: savedProgress.gridAnswers ?? emptyProgress.gridAnswers,
-      rowAnswers: savedProgress.rowAnswers ?? emptyProgress.rowAnswers,
-      missedFacts: savedProgress.missedFacts ?? emptyProgress.missedFacts,
-      randomStats: {
-        ...emptyProgress.randomStats,
-        ...(savedProgress.randomStats ?? {}),
-      },
-    };
+    return mergeProgress(JSON.parse(rawProgress));
   } catch {
     return emptyProgress;
   }
-};
-
-const getRandomFact = (avoidKey) => {
-  let nextFact = {
-    a: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
-    b: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
-  };
-
-  for (let attempt = 0; attempt < 20 && makeFactKey(nextFact.a, nextFact.b) === avoidKey; attempt += 1) {
-    nextFact = {
-      a: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
-      b: NUMBERS[Math.floor(Math.random() * NUMBERS.length)],
-    };
-  }
-
-  return nextFact;
 };
 
 function App() {
@@ -90,7 +58,11 @@ function App() {
   const [progress, setProgress] = useState(loadProgress);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    } catch {
+      // Progress is best-effort in local storage; practice should keep working.
+    }
   }, [progress]);
 
   const missedFacts = useMemo(
@@ -99,34 +71,11 @@ function App() {
   );
 
   const addMissedFact = (a, b) => {
-    const key = makeFactKey(a, b);
-    setProgress((current) => {
-      const previous = current.missedFacts[key];
-      return {
-        ...current,
-        missedFacts: {
-          ...current.missedFacts,
-          [key]: {
-            key,
-            a,
-            b,
-            misses: (previous?.misses ?? 0) + 1,
-            lastMissedAt: Date.now(),
-          },
-        },
-      };
-    });
+    setProgress((current) => addMissedFactToProgress(current, a, b));
   };
 
   const removeMissedFact = (key) => {
-    setProgress((current) => {
-      const nextMissed = { ...current.missedFacts };
-      delete nextMissed[key];
-      return {
-        ...current,
-        missedFacts: nextMissed,
-      };
-    });
+    setProgress((current) => removeMissedFactFromProgress(current, key));
   };
 
   const updateProgress = (updater) => {
@@ -162,6 +111,7 @@ function App() {
           return (
             <button
               className={activeMode === mode.id ? 'mode-tab active' : 'mode-tab'}
+              aria-current={activeMode === mode.id ? 'page' : undefined}
               key={mode.id}
               type="button"
               onClick={() => setActiveMode(mode.id)}
@@ -187,36 +137,10 @@ function App() {
 function FullGridMode({ addMissedFact, progress, updateProgress }) {
   const [showAnswers, setShowAnswers] = useState(false);
 
-  const gridFacts = useMemo(
-    () =>
-      NUMBERS.flatMap((row) =>
-        NUMBERS.map((column) => ({
-          row,
-          column,
-          key: makeFactKey(row, column),
-          answer: row * column,
-        })),
-      ),
-    [],
-  );
+  const gridFacts = useMemo(() => createFacts(), []);
 
   const stats = useMemo(() => {
-    const completed = gridFacts.filter((fact) => progress.gridAnswers[fact.key]).length;
-    const correct = gridFacts.filter(
-      (fact) => Number(progress.gridAnswers[fact.key]) === fact.answer,
-    ).length;
-    const incorrect = gridFacts.filter((fact) => {
-      const value = progress.gridAnswers[fact.key];
-      return value && Number(value) !== fact.answer;
-    }).length;
-    const percent = completed === 0 ? 0 : Math.round((correct / completed) * 100);
-
-    return {
-      completed,
-      correct,
-      incorrect,
-      percent,
-    };
+    return calculateGridStats(progress.gridAnswers, gridFacts);
   }, [gridFacts, progress.gridAnswers]);
 
   const updateCell = (key, value) => {
@@ -230,12 +154,9 @@ function FullGridMode({ addMissedFact, progress, updateProgress }) {
   };
 
   const checkAnswers = () => {
-    gridFacts.forEach((fact) => {
-      const value = progress.gridAnswers[fact.key];
-      if (value && Number(value) !== fact.answer) {
-        addMissedFact(fact.row, fact.column);
-      }
-    });
+    findMissedAnsweredFacts(progress.gridAnswers, gridFacts).forEach((fact) =>
+      addMissedFact(fact.a, fact.b),
+    );
     updateProgress(() => ({ gridChecked: true }));
   };
 
@@ -247,6 +168,7 @@ function FullGridMode({ addMissedFact, progress, updateProgress }) {
   return (
     <section className="mode-panel" aria-labelledby="grid-heading">
       <PanelHeader
+        headingId="grid-heading"
         icon={Grid3X3}
         title="Full Grid"
         subtitle="Fill the whole 12 by 12 board and check it when you are ready."
@@ -261,7 +183,12 @@ function FullGridMode({ addMissedFact, progress, updateProgress }) {
       />
 
       <div className="toolbar">
-        <button className="primary-button" type="button" onClick={checkAnswers}>
+        <button
+          className="primary-button"
+          disabled={stats.completed === 0}
+          type="button"
+          onClick={checkAnswers}
+        >
           <CheckCircle2 size={18} aria-hidden="true" />
           Check Answers
         </button>
@@ -281,7 +208,10 @@ function FullGridMode({ addMissedFact, progress, updateProgress }) {
       </div>
 
       {progress.gridChecked && (
-        <div className={stats.incorrect === 0 ? 'feedback-banner success' : 'feedback-banner needs-work'}>
+        <div
+          className={stats.incorrect === 0 ? 'feedback-banner success' : 'feedback-banner needs-work'}
+          role="status"
+        >
           <strong>
             {stats.incorrect === 0 && stats.completed > 0
               ? 'Great check!'
@@ -353,15 +283,10 @@ function FullGridMode({ addMissedFact, progress, updateProgress }) {
 function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
   const family = progress.rowFamily;
   const answers = progress.rowAnswers[family] ?? {};
-  const rowFacts = NUMBERS.map((number) => ({
-    a: family,
-    b: number,
-    key: makeFactKey(family, number),
-    answer: family * number,
-  }));
+  const rowFacts = createRowFacts(family);
 
   const checked = answers.__checked === 'yes';
-  const correct = rowFacts.filter((fact) => Number(answers[fact.key]) === fact.answer).length;
+  const correct = rowFacts.filter((fact) => isCorrectAnswer(answers[fact.key], fact.answer)).length;
   const completed = rowFacts.filter((fact) => answers[fact.key]).length;
   const isPerfect = checked && correct === rowFacts.length;
 
@@ -379,12 +304,7 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
   };
 
   const checkAnswers = () => {
-    rowFacts.forEach((fact) => {
-      const value = answers[fact.key];
-      if (value && Number(value) !== fact.answer) {
-        addMissedFact(fact.a, fact.b);
-      }
-    });
+    findMissedAnsweredFacts(answers, rowFacts).forEach((fact) => addMissedFact(fact.a, fact.b));
 
     updateProgress((current) => ({
       rowAnswers: {
@@ -418,6 +338,7 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
   return (
     <section className="mode-panel" aria-labelledby="row-heading">
       <PanelHeader
+        headingId="row-heading"
         icon={Rows3}
         title="Row Practice"
         subtitle="Pick one number family and work through all twelve facts."
@@ -427,6 +348,7 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
         {NUMBERS.map((number) => (
           <button
             className={number === family ? 'family-chip active' : 'family-chip'}
+            aria-pressed={number === family}
             key={number}
             onClick={() => chooseFamily(number)}
             type="button"
@@ -445,7 +367,7 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
       />
 
       {checked && (
-        <div className={isPerfect ? 'feedback-banner success' : 'feedback-banner needs-work'}>
+        <div className={isPerfect ? 'feedback-banner success' : 'feedback-banner needs-work'} role="status">
           <strong>{isPerfect ? 'Row mastered!' : `${12 - correct} to review`}</strong>
           <span>
             {isPerfect
@@ -458,7 +380,7 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
       <div className="question-list">
         {rowFacts.map((fact) => {
           const value = answers[fact.key] ?? '';
-          const isCorrect = Number(value) === fact.answer;
+          const isCorrect = isCorrectAnswer(value, fact.answer);
           const statusClass =
             checked && value
               ? isCorrect
@@ -488,7 +410,12 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
       </div>
 
       <div className="toolbar">
-        <button className="primary-button" type="button" onClick={checkAnswers}>
+        <button
+          className="primary-button"
+          disabled={completed === 0}
+          type="button"
+          onClick={checkAnswers}
+        >
           <CheckCircle2 size={18} aria-hidden="true" />
           Check Answers
         </button>
@@ -546,7 +473,7 @@ function RandomPracticeMode({ addMissedFact, progress, updateProgress }) {
   };
 
   const nextFact = () => {
-    setFact(getRandomFact(makeFactKey(fact.a, fact.b)));
+    setFact(getRandomFact({ avoidKey: makeFactKey(fact.a, fact.b) }));
     setAnswer('');
     setResult(null);
   };
@@ -566,6 +493,7 @@ function RandomPracticeMode({ addMissedFact, progress, updateProgress }) {
   return (
     <section className="mode-panel" aria-labelledby="random-heading">
       <PanelHeader
+        headingId="random-heading"
         icon={Shuffle}
         title="Random Practice"
         subtitle="Try one surprise fact at a time and build a streak."
@@ -600,7 +528,7 @@ function RandomPracticeMode({ addMissedFact, progress, updateProgress }) {
         )}
         <div className="toolbar centered">
           {!result ? (
-            <button className="primary-button" type="submit">
+            <button className="primary-button" disabled={!answer} type="submit">
               <CheckCircle2 size={18} aria-hidden="true" />
               Check
             </button>
@@ -663,13 +591,14 @@ function MissedFactsMode({ missedFacts, removeMissedFact }) {
   return (
     <section className="mode-panel" aria-labelledby="missed-heading">
       <PanelHeader
+        headingId="missed-heading"
         icon={Target}
         title="Missed Facts"
         subtitle="Retry saved facts. A correct answer clears the fact from the list."
       />
 
       {clearedFact && (
-        <div className="feedback-banner success">
+        <div className="feedback-banner success" role="status">
           <strong>Fact cleared!</strong>
           <span>{clearedFact} moved out of Missed Facts.</span>
         </div>
@@ -699,7 +628,12 @@ function MissedFactsMode({ missedFacts, removeMissedFact }) {
                   onChange={(event) => updateAnswer(fact.key, event.target.value)}
                   value={answers[fact.key] ?? ''}
                 />
-                <button className="primary-button compact" type="button" onClick={() => retryFact(fact)}>
+                <button
+                  className="primary-button compact"
+                  disabled={!answers[fact.key]}
+                  type="button"
+                  onClick={() => retryFact(fact)}
+                >
                   <CheckCircle2 size={18} aria-hidden="true" />
                   Check
                 </button>
@@ -715,14 +649,14 @@ function MissedFactsMode({ missedFacts, removeMissedFact }) {
   );
 }
 
-function PanelHeader({ icon: Icon, title, subtitle }) {
+function PanelHeader({ headingId, icon: Icon, title, subtitle }) {
   return (
     <div className="panel-header">
       <div className="panel-icon">
         <Icon size={24} aria-hidden="true" />
       </div>
       <div>
-        <h2>{title}</h2>
+        <h2 id={headingId}>{title}</h2>
         <p>{subtitle}</p>
       </div>
     </div>

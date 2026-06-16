@@ -40,6 +40,17 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+button:focus-visible,
+.toggle-control:focus-within {
+  outline: 3px solid rgba(50, 120, 216, 0.45);
+  outline-offset: 3px;
+}
+
 .app-shell {
   width: min(1180px, calc(100% - 28px));
   margin: 0 auto;
