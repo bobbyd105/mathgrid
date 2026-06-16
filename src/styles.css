@@ -250,6 +250,37 @@ h1 {
   width: 18px;
 }
 
+.feedback-banner {
+  align-items: center;
+  border: 2px solid;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+
+.feedback-banner strong {
+  font-size: 1.05rem;
+}
+
+.feedback-banner span {
+  font-weight: 800;
+}
+
+.feedback-banner.success {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: #226b43;
+}
+
+.feedback-banner.needs-work {
+  background: #fff0d7;
+  border-color: #f0ad4e;
+  color: #7a4b08;
+}
+
 .grid-scroll {
   overflow-x: auto;
   padding-bottom: 8px;
@@ -274,11 +305,24 @@ h1 {
   background: #e7f3ff;
   color: var(--blue-dark);
   font-weight: 900;
+  position: sticky;
+  z-index: 1;
+}
+
+.multiplication-grid thead th {
+  top: 0;
+  z-index: 2;
+}
+
+.multiplication-grid tbody th {
+  left: 0;
 }
 
 .multiplication-grid .corner-cell {
   background: var(--coral);
   color: #4f2617;
+  left: 0;
+  z-index: 3;
 }
 
 .multiplication-grid td {

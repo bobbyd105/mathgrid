@@ -162,7 +162,7 @@ function App() {
   );
 }
 
-function FullGridMode({ progress, updateProgress }) {
+function FullGridMode({ addMissedFact, progress, updateProgress }) {
   const [showAnswers, setShowAnswers] = useState(false);
 
   const gridFacts = useMemo(
@@ -183,11 +183,16 @@ function FullGridMode({ progress, updateProgress }) {
     const correct = gridFacts.filter(
       (fact) => Number(progress.gridAnswers[fact.key]) === fact.answer,
     ).length;
+    const incorrect = gridFacts.filter((fact) => {
+      const value = progress.gridAnswers[fact.key];
+      return value && Number(value) !== fact.answer;
+    }).length;
     const percent = completed === 0 ? 0 : Math.round((correct / completed) * 100);
 
     return {
       completed,
       correct,
+      incorrect,
       percent,
     };
   }, [gridFacts, progress.gridAnswers]);
@@ -203,6 +208,12 @@ function FullGridMode({ progress, updateProgress }) {
   };
 
   const checkAnswers = () => {
+    gridFacts.forEach((fact) => {
+      const value = progress.gridAnswers[fact.key];
+      if (value && Number(value) !== fact.answer) {
+        addMissedFact(fact.row, fact.column);
+      }
+    });
     updateProgress(() => ({ gridChecked: true }));
   };
 
@@ -246,6 +257,21 @@ function FullGridMode({ progress, updateProgress }) {
           <span>Show Answers</span>
         </label>
       </div>
+
+      {progress.gridChecked && (
+        <div className={stats.incorrect === 0 ? 'feedback-banner success' : 'feedback-banner needs-work'}>
+          <strong>
+            {stats.incorrect === 0 && stats.completed > 0
+              ? 'Great check!'
+              : `${stats.incorrect} to practice`}
+          </strong>
+          <span>
+            {stats.incorrect === 0
+              ? `${stats.correct} answers are correct.`
+              : 'Wrong answers were added to Missed Facts.'}
+          </span>
+        </div>
+      )}
 
       <div className="grid-scroll">
         <table className="multiplication-grid">
@@ -331,7 +357,8 @@ function RowPracticeMode({ addMissedFact, progress, updateProgress }) {
 
   const checkAnswers = () => {
     rowFacts.forEach((fact) => {
-      if (Number(answers[fact.key]) !== fact.answer) {
+      const value = answers[fact.key];
+      if (value && Number(value) !== fact.answer) {
         addMissedFact(fact.a, fact.b);
       }
     });
